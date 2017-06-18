@@ -338,7 +338,7 @@ cdef class ndarray:
 
     # TODO(okuta): Implement byteswap
 
-    cpdef ndarray copy(self, order='C'):
+    cpdef ndarray copy(self, order='K'):
         """Returns a copy of the array.
 
         This method makes a copy of a given array in the current device.
@@ -438,7 +438,7 @@ cdef class ndarray:
         if strides.size() == shape.size():
             newarray = self.view()
         else:
-            newarray = self.copy()
+            newarray = ascontiguousarray(self)
             strides = _get_strides_for_nocopy_reshape(newarray, shape)
 
         if shape.size() != strides.size():
@@ -555,12 +555,7 @@ cdef class ndarray:
 
         """
         # TODO(beam2d): Support ordering option
-        if self._c_contiguous:
-            newarray = self.copy()
-        else:
-            newarray = ndarray(self.shape, self.dtype)
-            elementwise_copy(self, newarray)
-
+        newarray = self.copy(order='C')
         newarray._shape.assign(<Py_ssize_t>1, self.size)
         newarray._strides.assign(<Py_ssize_t>1, <Py_ssize_t>self.itemsize)
         newarray._c_contiguous = True
@@ -2626,7 +2621,7 @@ cpdef ndarray _take(ndarray a, indices, li=None, ri=None, ndarray out=None):
         if li is not None and ri is not None and li == ri:
             a = rollaxis(a, li)
         if out is None:
-            return a[indices].copy()
+            return ascontiguousarray(a[indices])
         else:
             if out.dtype != a.dtype:
                 raise TypeError('Output dtype mismatch')
@@ -3388,14 +3383,14 @@ cpdef inline tuple _mat_to_cublas_contiguous(ndarray a, Py_ssize_t trans):
             lda = a._shape[0]
         return a, trans, lda
     if not a._c_contiguous:
-        a = a.copy()
+        a = ascontiguousarray(a)
     return a, 1 - trans, a._strides[0] // a.itemsize
 
 
 @cython.profile(False)
 cpdef inline tuple _to_cublas_vector(ndarray a, Py_ssize_t rundim):
     if a._strides[rundim] < 0:
-        return a.copy(), 1
+        return ascontiguousarray(a), 1
     else:
         return a, a._strides[rundim] // a.itemsize
 
